@@ -1,0 +1,398 @@
+import pygame as pyg
+import pymunk
+import pymunk.pygame_util as pgut
+import math
+import glob, os, random
+
+from pygame.math import Vector2     #pygame.math.Vector2() is too long
+
+pyg.init()
+
+#getting display size to set the position of window when creating a screen surface
+display_info = pyg.display.Info()
+display_size = Vector2(display_info.current_w, display_info.current_h)
+def set_window_pos(surf):
+    global display_info, display_size
+    surf_size = Vector2(surf.get_size())
+    display_pos = tuple((display_size - surf_size)/2)
+    pyg.display.set_window_position(display_pos)
+
+
+#the menu of the game, currently only has title and start button to start the simulation of pymunk
+def menu():
+    pyg.font.init()
+    #title
+    title_font_name = pyg.font.match_font('comic sans')     #i like comic sans
+    title_font = pyg.font.Font(title_font_name, size = 50)  #big font
+    title_text = "BONK.PYGM"    #bonk.py 'g'ame+'m'unk      #kinda looks like just pygame in short lol
+    title = title_font.render(title_text, False, "black")
+
+    #button rect
+    start_button_rect = pyg.Rect(0, 0, 100, 30)
+    #button text
+    start_button_font = pyg.font.Font(title_font_name, size = 30)
+    start_button = start_button_font.render(" start ", False, "black")
+    start_button_rect = start_button.get_rect(center = start_button_rect.center)
+ 
+    screen = pyg.display.set_mode((640, 480))   #the screen res for all
+    set_window_pos(screen)  #moving window to the middle of the monitor
+    clock = pyg.time.Clock
+    run = 1     #RUN
+    scr_size = Vector2(screen.get_size())   #too lazy to type screen.get_width() and screen.get_height() every time
+
+    while run:      #actual loop
+        mouse_pos = pyg.mouse.get_pos()
+        click = False   #getting mouse click
+
+        for event in pyg.event.get():
+            if event.type == pyg.QUIT:
+                run = 0
+                return "quit"
+            '''
+            if event.type == pyg.VIDEORESIZE:
+                w, h = event.dict['size'][0], event.dict['size'][1]
+                if w/4 <= h/3:
+                    w, h = w, w/4 * 3
+                else:
+                    w, h = h/3 * 4, h
+                    screen = pyg.display.set_mode(
+                        (w, h), flags = pyg.RESIZABLE
+                        )
+                scr_size = Vector2(screen.get_size())
+                '''     #this is for the game window
+            if event.type == pyg.MOUSEBUTTONDOWN and event.button == 1:
+                click = True
+
+
+        screen.fill("grey")
+
+        #title and buttons
+        title_pos = ((scr_size.x - title.get_width())/2, 125)
+        screen.blit(title, title_pos)
+
+        if start_button_rect.collidepoint(mouse_pos):
+            pyg.draw.rect(screen, (220, 220, 220), start_button_rect)
+            if click:
+                game()
+                break
+
+        else:
+            pyg.draw.rect(screen, (170, 170, 170), start_button_rect)
+           
+
+        start_button_rect.center = scr_size/2
+        screen.blit(start_button, start_button_rect)
+        
+        pyg.display.flip()
+
+
+def game():
+    screen = pyg.display.set_mode((1280, 720))
+    set_window_pos(screen)
+    scr_size = Vector2(screen.get_size())
+
+    run = 1
+
+    clock = pyg.time.Clock()
+    dt = 0
+
+    pgut.positive_y_is_up = True
+    space = pymunk.Space()
+    space.gravity = (0, -200)
+    space.collision_bias = 0
+
+
+    #player and map
+    """Player.group = []
+    Rect.group = []
+    test1 = Player("P1", screen.get_width() / 6, screen.get_height() / 4 * 3, "red",
+	    pyg.K_a, pyg.K_d, pyg.K_w, pyg.K_s, pyg.K_TAB)
+    test2 = Player("P2", screen.get_width() / 6 * 5, screen.get_height() / 4 * 3, "blue",
+	    pyg.K_LEFT, pyg.K_RIGHT, pyg.K_UP, pyg.K_DOWN, pyg.K_RETURN)
+    for player in Player.group:
+        space.add(player.shape, player.body)
+
+    ground_1 = Rect("black", scr_size/2, scr_size.y * 1.4, 10)
+    diamond = Rect("yellow", scr_size/2, 50, 50,
+                   facing = 45)
+
+    for rect in Rect.group:
+        space.add(rect.shape, rect.body)"""
+    pos_reset(space)
+
+    while run:
+        for event in pyg.event.get():
+            if event.type == pyg.QUIT:
+                run = 0
+            if event.type == pyg.VIDEORESIZE:
+                w, h = event.dict['size'][0], event.dict['size'][1]
+                if w/16 <= h/9:
+                    w, h = w, w/16 * 9
+                else:
+                    w, h = h/9 * 16, h
+                    screen = pyg.display.set_mode(
+                        (w, h), flags = pyg.RESIZABLE
+                        )
+                scr_size = Vector2(screen.get_size())
+
+            
+        if pyg.display.get_active():
+            dt = clock.tick(60) / 1000
+            if dt < 0.1:
+                space.step(dt)
+
+            screen.fill("white")
+            for rect in Rect.group:
+                rect.cycle(screen)
+            for player in Player.group:
+                player.cycle(screen, space)
+
+
+            #fps
+            fps(screen, dt)
+
+            pyg.display.flip()
+
+#define pos_reset
+def pos_reset(space):
+    import shutil
+    global players, rects, map_display_name, map_display_timer
+    import pygame
+
+    dir_path = os.path.dirname(os.path.realpath(__file__))
+    
+    players = {}
+    rects = {}
+    Player.group.clear()
+    Rect.group.clear()
+    Player.death_count = 0
+    
+    if not glob.glob("maps/*.txt"):
+        if glob.glob("maps/Used/*.txt"):
+            for map_file in glob.glob("maps/Used/*.txt"):
+                shutil.move(map_file, f"{dir_path}/maps")
+        else:
+            raise FileNotFoundError("no map or folder existing")
+
+    map_files = glob.glob("maps/*.txt")
+    map_c = random.choice(map_files)
+
+    # Extract the map name and set up the 2-second display timer
+    map_display_name = os.path.splitext(os.path.basename(map_c))[0]
+    map_display_timer = pyg.time.get_ticks() + 2000
+
+    bonk_map = []
+    with open(map_c, "r", encoding="utf-8") as f:
+        for line in f:
+            if "\\" in line:
+                break
+            bonk_map.append(line)
+
+    exec("".join(bonk_map))
+
+    for p in Player.group:
+        space.add(p.shape, p.body)
+    for r in Rect.group:
+        space.add(r.shape, r.body)
+
+    shutil.move(map_c, f"{dir_path}/maps/Used")
+
+    
+def fps(surf, dt):
+    font = pyg.font.Font(None, 30)
+    framepersec = (1/dt)//1
+    if framepersec >= 50:
+        color = "green"
+    elif framepersec >= 30:
+        color = "yellow"
+    else:
+        color = "red" 
+    fps_surf = font.render(f"FPS:{framepersec}", False, color)
+    surf.blit(fps_surf)
+
+
+class Player:
+    group = []
+    id_group = {}
+    score = {}
+    death_count = 0
+
+    def __init__(self, pid, pos_x, pos_y, col,
+                 kleft, kright, kjump, kfall, kheavy,
+                 radius = 20):
+        
+        self.pid = pid
+        self.col = col
+
+        self.body = pymunk.Body(radius, 1)
+        self.body.position = (pos_x, pos_y)
+        self.shape = pymunk.Circle(self.body, radius)
+        self.shape.parent_object = self
+        self.shape.friction = 0
+        self.shape.collision_type = 2    #COLLTYPE_BALL
+        self.shape.elasticity = 0.7
+        self.shape.data = self
+        self.pos = self.body.position
+
+        self.kleft = kleft
+        self.kright = kright
+        self.kjump = kjump
+        self.kfall = kfall
+        self.kheavy = kheavy
+
+        self.onground = 1
+        self.alive = 1
+
+        Player.group.append(self)
+        if pid not in Player.score:
+            Player.score[pid] = 0
+
+    def render(self, surf):
+        body_pos = pgut.to_pygame(self.shape.body.position, surf)
+        pyg.draw.circle(surf, self.col, body_pos, self.shape.radius)
+
+    def move(self):
+        keys = pyg.key.get_pressed()
+        if keys[self.kjump]:
+            if self.onground:
+                self.body.apply_impulse_at_local_point((0, 2500))
+                self.onground = 0
+            else:
+                self.body.velocity_func = lower_gravity
+        elif keys[self.kfall]:
+            self.body.velocity_func = higher_gravity
+        else:
+            self.body.velocity_func = normal_gravity
+        
+        if keys[self.kleft]:
+            self.body.apply_impulse_at_local_point((-90, 0))
+        if keys[self.kright]:
+            self.body.apply_impulse_at_local_point((90, 0))
+
+    def cycle(self, surf, space):
+        self.jump(space)
+        self.move()
+        self.render(surf)
+
+    def jump(self, space):
+        def begin(arbiter, space, data):
+            rect, circle = arbiter.shapes
+            test_points = arbiter.contact_point_set.points[0]
+
+            c = circle.body.position
+            p = test_points.point_a
+            if c.y > p.y and abs(c.x - p.x) < circle.radius / 3 * 2:
+                circle.data.onground = 1
+            return True
+        
+        def separate(arbiter, space, data):
+            rect, circle = arbiter.shapes
+            circle.data.onground = 0
+            return True
+        
+        space.on_collision(0, 2, begin=begin, separate=separate, data=self)
+
+def normal_gravity(body, gravity, damping, dt):
+    jump_gravity = (0, -200)
+    pymunk.Body.update_velocity(body, jump_gravity, damping, dt)
+
+def lower_gravity(body, gravity, damping, dt):
+    jump_gravity = (0, -100)
+    pymunk.Body.update_velocity(body, jump_gravity, damping, dt)
+
+def higher_gravity(body, gravity, damping, dt):
+    jump_gravity = (0, -300)
+    pymunk.Body.update_velocity(body, jump_gravity, damping, dt)
+
+
+class Rect:
+    group = []
+    def __init__(self, col, center, width, height,
+                 facing = 0, bouncy = False, rotation = False, movement = False, death = False):
+        self.width = width
+        self.height = height
+        self.facing = facing
+        self.color = pyg.Color(col)
+        self.bouncy = bouncy
+        self.do_update = rotation or movement
+        self.rotating = rotation    #rotation = (orb_center, orb_vel, rot_vel)
+        self.moving = movement    #movement = ((x, y)'min', (x, y)'max', (x,y)'vector')
+        self.death = death
+
+        if self.do_update:
+            if self.rotating:
+                if not rotation[0]:
+                    self.orb_center = center
+                else:
+                    self.orb_center = rotation[0]
+                self.orb_speed = rotation[1]
+                self.rot_speed = rotation[2]
+                self.vel = Vector2(0,0) #orb_vel
+
+            if self.moving:
+                self.min_pos = Vector2(self.moving[0])
+                self.max_pos = Vector2(self.moving[1])
+                self.speed = Vector2(self.moving[2])    #move_vel
+
+
+        self.body = pymunk.Body(body_type = pymunk.Body.STATIC)
+        self.shape = pymunk.Poly.create_box(self.body, (self.width, self.height))
+        self.shape.collision_type = 0
+        self.shape.body.position = tuple(center)
+        self.shape.body.angle = -math.radians(facing)
+        self.shape.friction = 1
+        if self.bouncy:
+            self.shape.elasticity = self.bouncy
+
+        Rect.group.append(self)
+
+    def render(self, surf):
+        self.position = pgut.to_pygame(self.shape.body.position, surf)
+        points = self.shape.get_vertices()
+        world_points = []
+        for point in points:
+            world_point = self.shape.body.local_to_world(point)
+            world_points.append(pgut.to_pygame(world_point, surf))
+        pyg.draw.polygon(surf, self.color, world_points)
+
+    def cycle(self, surf):
+        self.render(surf)
+
+    def rotation(self, dt):
+        #orbiting
+        pos_vector = self.pos - self.orb_center
+        pos_vector.rotate_rad_ip(-self.orb_speed * dt)
+        self.vel = self.orb_center + pos_vector - self.pos
+        self.pos = self.orb_center + pos_vector
+
+        #rotating
+        self.facing -= self.rot_speed * dt
+        self.facing %= 2 * math.pi
+        self.shape.body.angle = -math.radians(self.facing)
+           
+
+    def movement(self, dt):
+        #movement
+        if self.min_pos.x > self.pos.x:
+            self.speed.x = abs(self.speed.x)
+        elif self.max_pos.x < self.pos.x:
+            self.speed.x = -abs(self.speed.x)
+        if self.min_pos.y > self.pos.y:
+            self.speed.y = abs(self.speed.y)
+        elif self.max_pos.y < self.pos.y:
+            self.speed.y = -abs(self.speed.y)
+        
+        #apply speed!
+        
+    def update(self, dt):
+        if self.do_update:
+            if self.rotating:
+                self.rotation(dt)
+            if self.moving:
+                self.movement(dt)
+
+
+while menu() != 'quit':
+    pass
+
+pyg.quit()
