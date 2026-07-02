@@ -1,7 +1,7 @@
 # players
-players["p_1"] = Player("P1", 40, screen.get_height() / 2, "red",
+players["p_1"] = Player("P1", 40, 720 / 2, "red",
 	pygame.K_a, pygame.K_d, pygame.K_w, pygame.K_s, pygame.K_LCTRL)
-players["p_2"] = Player("P2", 80, screen.get_height() / 2, "blue",
+players["p_2"] = Player("P2", 80, 720 / 2, "blue",
 	pygame.K_LEFT, pygame.K_RIGHT, pygame.K_UP, pygame.K_DOWN, pygame.K_RETURN)
 
 global player_collision_status

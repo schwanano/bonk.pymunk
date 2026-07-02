@@ -101,6 +101,8 @@ def game():
     space.gravity = (0, -200)
     space.collision_bias = 0
 
+    global global_movement
+    global_movement = Vector2()
 
     #player and map
     """Player.group = []
@@ -143,7 +145,7 @@ def game():
 
             screen.fill("white")
             for rect in Rect.group:
-                rect.cycle(screen)
+                rect.cycle(screen, dt)
             for player in Player.group:
                 player.cycle(screen, space)
 
@@ -167,14 +169,14 @@ def pos_reset(space):
     Rect.group.clear()
     Player.death_count = 0
     
-    if not glob.glob("maps/*.txt"):
-        if glob.glob("maps/Used/*.txt"):
-            for map_file in glob.glob("maps/Used/*.txt"):
+    if not glob.glob(f"{dir_path}/maps/*.txt"):
+        if glob.glob(f"{dir_path}/maps/Used/*.txt"):
+            for map_file in glob.glob(f"{dir_path}/maps/Used/*.txt"):
                 shutil.move(map_file, f"{dir_path}/maps")
         else:
             raise FileNotFoundError("no map or folder existing")
 
-    map_files = glob.glob("maps/*.txt")
+    map_files = glob.glob(f"{dir_path}/maps/*.txt")
     map_c = random.choice(map_files)
 
     # Extract the map name and set up the 2-second display timer
@@ -255,7 +257,7 @@ class Player:
         keys = pyg.key.get_pressed()
         if keys[self.kjump]:
             if self.onground:
-                self.body.apply_impulse_at_local_point((0, 2500))
+                self.body.apply_impulse_at_local_point((0, 2600))
                 self.onground = 0
             else:
                 self.body.velocity_func = lower_gravity
@@ -297,7 +299,7 @@ def normal_gravity(body, gravity, damping, dt):
     pymunk.Body.update_velocity(body, jump_gravity, damping, dt)
 
 def lower_gravity(body, gravity, damping, dt):
-    jump_gravity = (0, -100)
+    jump_gravity = (0, -90)
     pymunk.Body.update_velocity(body, jump_gravity, damping, dt)
 
 def higher_gravity(body, gravity, damping, dt):
@@ -319,23 +321,7 @@ class Rect:
         self.moving = movement    #movement = ((x, y)'min', (x, y)'max', (x,y)'vector')
         self.death = death
 
-        if self.do_update:
-            if self.rotating:
-                if not rotation[0]:
-                    self.orb_center = center
-                else:
-                    self.orb_center = rotation[0]
-                self.orb_speed = rotation[1]
-                self.rot_speed = rotation[2]
-                self.vel = Vector2(0,0) #orb_vel
-
-            if self.moving:
-                self.min_pos = Vector2(self.moving[0])
-                self.max_pos = Vector2(self.moving[1])
-                self.speed = Vector2(self.moving[2])    #move_vel
-
-
-        self.body = pymunk.Body(body_type = pymunk.Body.STATIC)
+        self.body = pymunk.Body(body_type = pymunk.Body.KINEMATIC)
         self.shape = pymunk.Poly.create_box(self.body, (self.width, self.height))
         self.shape.collision_type = 0
         self.shape.body.position = tuple(center)
@@ -344,6 +330,24 @@ class Rect:
         if self.bouncy:
             self.shape.elasticity = self.bouncy
 
+        if self.do_update:
+            if self.rotating:
+                if not self.rotating[0]:
+                    self.orb_center = self.shape.body.position
+                else:
+                    self.orb_center = self.rotating[0]
+                self.orb_speed = self.rotating[1]
+                self.rot_speed = self.rotating[2]
+                self.vel = Vector2(0,0) #orb_vel
+                self.vec_length = Vector2(
+                    self.shape.body.position - self.orb_center
+                    ).length()
+
+            if self.moving:
+                self.min_pos = Vector2(self.moving[0])
+                self.max_pos = Vector2(self.moving[1])
+                self.speed = Vector2(self.moving[2])    #move_vel
+                
         Rect.group.append(self)
 
     def render(self, surf):
@@ -355,34 +359,39 @@ class Rect:
             world_points.append(pgut.to_pygame(world_point, surf))
         pyg.draw.polygon(surf, self.color, world_points)
 
-    def cycle(self, surf):
+    def cycle(self, surf, dt):
+        self.update(dt)
         self.render(surf)
 
     def rotation(self, dt):
         #orbiting
-        pos_vector = self.pos - self.orb_center
-        pos_vector.rotate_rad_ip(-self.orb_speed * dt)
-        self.vel = self.orb_center + pos_vector - self.pos
-        self.pos = self.orb_center + pos_vector
-
+        if self.rotating[0] and self.rotating[1]:
+            direction = Vector2(
+                self.shape.body.position - self.orb_center
+                ).normalize()
+            direction.rotate_ip(90)
+            def speed_set(body, gravity, damping, dt):
+                self.body.velocity = tuple(direction * self.vec_length * -self.orb_speed)
+            self.body.velocity_func = speed_set
         #rotating
-        self.facing -= self.rot_speed * dt
-        self.facing %= 2 * math.pi
-        self.shape.body.angle = -math.radians(self.facing)
+        self.body.angular_velocity = self.rot_speed
            
 
     def movement(self, dt):
         #movement
-        if self.min_pos.x > self.pos.x:
+        if self.min_pos.x > self.shape.body.position.x:
             self.speed.x = abs(self.speed.x)
-        elif self.max_pos.x < self.pos.x:
+        elif self.max_pos.x < self.shape.body.position.x:
             self.speed.x = -abs(self.speed.x)
-        if self.min_pos.y > self.pos.y:
+        if self.min_pos.y > self.shape.body.position.y:
             self.speed.y = abs(self.speed.y)
-        elif self.max_pos.y < self.pos.y:
+        elif self.max_pos.y < self.shape.body.position.y:
             self.speed.y = -abs(self.speed.y)
         
         #apply speed!
+        def speed_set(body, gravity, damping, dt):
+            self.body.velocity = tuple(self.speed)
+        self.body.velocity_func = speed_set
         
     def update(self, dt):
         if self.do_update:
