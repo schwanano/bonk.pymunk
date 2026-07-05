@@ -87,11 +87,11 @@ def menu():
 
 
 def game():
-    screen = pyg.display.set_mode((1280, 720))
-    set_window_pos(screen)
-    scr_size = Vector2(screen.get_size())
+    screen = pyg.display.set_mode((1280, 720))  #the superior scren res
+    set_window_pos(screen)  #centering window
+    scr_size = Vector2(screen.get_size())   #i should global this
 
-    run = 1
+    run = 1     #RUN
 
     clock = pyg.time.Clock()
     dt = 0
@@ -102,7 +102,7 @@ def game():
     space.collision_bias = 0
 
     global global_movement
-    global_movement = Vector2()
+    global_movement = Vector2()     #not implemented currently
 
     #player and map
     """Player.group = []
@@ -147,7 +147,7 @@ def game():
             for rect in Rect.group:
                 rect.cycle(screen, dt)
             for player in Player.group:
-                player.cycle(screen, space)
+                player.cycle(screen, space, dt)
 
 
             #fps
@@ -243,6 +243,7 @@ class Player:
         self.kheavy = kheavy
 
         self.onground = 1
+        self.coyote_time = 5   #frames
         self.alive = 1
 
         Player.group.append(self)
@@ -253,30 +254,33 @@ class Player:
         body_pos = pgut.to_pygame(self.shape.body.position, surf)
         pyg.draw.circle(surf, self.col, body_pos, self.shape.radius)
 
-    def move(self):
+    def move(self, dt):
         keys = pyg.key.get_pressed()
         if keys[self.kjump]:
-            if self.onground:
+            if self.onground > 0:
                 self.body.apply_impulse_at_local_point((0, 2600))
                 self.onground = 0
-            else:
-                self.body.velocity_func = lower_gravity
+            if self.onground <= 0:
+                self.body.velocity_func = Player.lower_gravity
         elif keys[self.kfall]:
-            self.body.velocity_func = higher_gravity
+            self.body.velocity_func = Player.higher_gravity
         else:
-            self.body.velocity_func = normal_gravity
+            self.body.velocity_func = Player.normal_gravity
         
         if keys[self.kleft]:
             self.body.apply_impulse_at_local_point((-90, 0))
         if keys[self.kright]:
             self.body.apply_impulse_at_local_point((90, 0))
+            
+        if 0 < self.onground < self.coyote_time:
+            self.onground -= dt * 60
 
-    def cycle(self, surf, space):
-        self.jump(space)
-        self.move()
+    def cycle(self, surf, space, dt):
+        self.jump(space, dt)
+        self.move(dt)
         self.render(surf)
 
-    def jump(self, space):
+    def jump(self, space, dt):
         def begin(arbiter, space, data):
             rect, circle = arbiter.shapes
             test_points = arbiter.contact_point_set.points[0]
@@ -284,27 +288,27 @@ class Player:
             c = circle.body.position
             p = test_points.point_a
             if c.y > p.y and abs(c.x - p.x) < circle.radius / 3 * 2:
-                circle.data.onground = 1
+                circle.data.onground = circle.data.coyote_time    #coyote time
             return True
         
         def separate(arbiter, space, data):
             rect, circle = arbiter.shapes
-            circle.data.onground = 0
+            circle.data.onground -= dt * 60
             return True
         
         space.on_collision(0, 2, begin=begin, separate=separate, data=self)
 
-def normal_gravity(body, gravity, damping, dt):
-    jump_gravity = (0, -200)
-    pymunk.Body.update_velocity(body, jump_gravity, damping, dt)
+    def normal_gravity(body, gravity, damping, dt):
+        jump_gravity = (0, -200)
+        pymunk.Body.update_velocity(body, jump_gravity, damping, dt)
 
-def lower_gravity(body, gravity, damping, dt):
-    jump_gravity = (0, -90)
-    pymunk.Body.update_velocity(body, jump_gravity, damping, dt)
+    def lower_gravity(body, gravity, damping, dt):
+        jump_gravity = (0, -90)
+        pymunk.Body.update_velocity(body, jump_gravity, damping, dt)
 
-def higher_gravity(body, gravity, damping, dt):
-    jump_gravity = (0, -300)
-    pymunk.Body.update_velocity(body, jump_gravity, damping, dt)
+    def higher_gravity(body, gravity, damping, dt):
+        jump_gravity = (0, -300)
+        pymunk.Body.update_velocity(body, jump_gravity, damping, dt)
 
 
 class Rect:
