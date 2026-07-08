@@ -105,21 +105,6 @@ def game():
     global_movement = Vector2()     #not implemented currently
 
     #player and map
-    """Player.group = []
-    Rect.group = []
-    test1 = Player("P1", screen.get_width() / 6, screen.get_height() / 4 * 3, "red",
-	    pyg.K_a, pyg.K_d, pyg.K_w, pyg.K_s, pyg.K_TAB)
-    test2 = Player("P2", screen.get_width() / 6 * 5, screen.get_height() / 4 * 3, "blue",
-	    pyg.K_LEFT, pyg.K_RIGHT, pyg.K_UP, pyg.K_DOWN, pyg.K_RETURN)
-    for player in Player.group:
-        space.add(player.shape, player.body)
-
-    ground_1 = Rect("black", scr_size/2, scr_size.y * 1.4, 10)
-    diamond = Rect("yellow", scr_size/2, 50, 50,
-                   facing = 45)
-
-    for rect in Rect.group:
-        space.add(rect.shape, rect.body)"""
     pos_reset(space)
 
     while run:
@@ -149,6 +134,11 @@ def game():
             for player in Player.group:
                 player.cycle(screen, space, dt)
 
+            if global_movement:
+                for rect in Rect.group:
+                    rect.body.position += global_movement * dt
+                for player in Player.group:
+                    player.body.position += global_movement * dt
 
             #fps
             fps(screen, dt)
@@ -202,7 +192,7 @@ def pos_reset(space):
     
 def fps(surf, dt):
     font = pyg.font.Font(None, 30)
-    framepersec = (1/dt)//1
+    framepersec = round((1/dt), 2)
     if framepersec >= 50:
         color = "green"
     elif framepersec >= 30:
@@ -251,14 +241,28 @@ class Player:
             Player.score[pid] = 0
 
     def render(self, surf):
-        body_pos = pgut.to_pygame(self.shape.body.position, surf)
-        pyg.draw.circle(surf, self.col, body_pos, self.shape.radius)
+        y_condition = self.body.position.y < surf.get_height() + self.shape.radius
+        x_condition = -self.shape.radius < self.body.position.x < self.shape.radius + surf.get_width()
+        if y_condition and x_condition:
+            render_pos = pgut.to_pygame(self.shape.body.position, surf)
+            pyg.draw.circle(surf, self.col, render_pos, self.shape.radius)
+        else:
+            shadow_pos = (
+                max(15, min(self.body.position.x, surf.get_width()- 15)),
+                max(15, min(self.body.position.y, surf.get_height() - 15))
+            )
+            bar_vector = Vector2(Vector2(shadow_pos)- self.body.position).normalize()
+            render_pos = pgut.to_pygame(shadow_pos, surf)
+            pyg.draw.circle(surf, "black", render_pos, 10, 2)
+            bar_render_pos_1 = pgut.to_pygame(shadow_pos, surf)
+            bar_render_pos_2 = pgut.to_pygame(shadow_pos - bar_vector * 8, surf)
+            pyg.draw.line(surf, self.col, bar_render_pos_1, bar_render_pos_2, 2)
 
     def move(self, dt):
         keys = pyg.key.get_pressed()
         if keys[self.kjump]:
             if self.onground > 0:
-                self.body.apply_impulse_at_local_point((0, 2600))
+                self.body.apply_impulse_at_local_point((0, 2600 - self.body.velocity.y * self.body.mass))
                 self.onground = 0
             if self.onground <= 0:
                 self.body.velocity_func = Player.lower_gravity
@@ -285,10 +289,11 @@ class Player:
             rect, circle = arbiter.shapes
             test_points = arbiter.contact_point_set.points[0]
 
-            c = circle.body.position
-            p = test_points.point_a
-            if c.y > p.y and abs(c.x - p.x) < circle.radius / 3 * 2:
-                circle.data.onground = circle.data.coyote_time    #coyote time
+            if rect.data.bouncy == False and rect.data.death == False:
+                c = circle.body.position
+                p = test_points.point_a
+                if c.y > p.y and abs(c.x - p.x) < circle.radius / 3 * 2:
+                    circle.data.onground = circle.data.coyote_time    #coyote time
             return True
         
         def separate(arbiter, space, data):
@@ -327,6 +332,7 @@ class Rect:
 
         self.body = pymunk.Body(body_type = pymunk.Body.KINEMATIC)
         self.shape = pymunk.Poly.create_box(self.body, (self.width, self.height))
+        self.shape.data = self
         self.shape.collision_type = 0
         self.shape.body.position = tuple(center)
         self.shape.body.angle = -math.radians(facing)
