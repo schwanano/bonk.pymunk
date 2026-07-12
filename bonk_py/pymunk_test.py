@@ -262,7 +262,7 @@ class Player:
         keys = pyg.key.get_pressed()
         if keys[self.kjump]:
             if self.onground > 0:
-                self.body.apply_impulse_at_local_point((0, 2600 - self.body.velocity.y * self.body.mass))
+                self.body.apply_impulse_at_local_point((0, 3000 - self.body.velocity.y * self.body.mass))
                 self.onground = 0
             if self.onground <= 0:
                 self.body.velocity_func = Player.lower_gravity
@@ -285,8 +285,12 @@ class Player:
         self.render(surf)
 
     def jump(self, space, dt):
-        def begin(arbiter, space, data):
-            rect, circle = arbiter.shapes
+        def pre_solve(arbiter, space, data):
+            for shape in arbiter.shapes:
+                if type(shape) == pymunk.Circle:
+                    circle = shape
+                elif type(shape) == pymunk.Poly:
+                    rect = shape
             test_points = arbiter.contact_point_set.points[0]
 
             if rect.data.bouncy == False and rect.data.death == False:
@@ -297,22 +301,26 @@ class Player:
             return True
         
         def separate(arbiter, space, data):
-            rect, circle = arbiter.shapes
+            for shape in arbiter.shapes:
+                if type(shape) == pymunk.Circle:
+                    circle = shape
+                elif type(shape) == pymunk.Poly:
+                    rect = shape
             circle.data.onground -= dt * 60
             return True
         
-        space.on_collision(0, 2, begin=begin, separate=separate, data=self)
+        space.on_collision(0, 2, pre_solve=pre_solve, separate=separate, data=self)
 
     def normal_gravity(body, gravity, damping, dt):
-        jump_gravity = (0, -200)
+        jump_gravity = (0, -250)
         pymunk.Body.update_velocity(body, jump_gravity, damping, dt)
 
     def lower_gravity(body, gravity, damping, dt):
-        jump_gravity = (0, -90)
+        jump_gravity = (0, -110)
         pymunk.Body.update_velocity(body, jump_gravity, damping, dt)
 
     def higher_gravity(body, gravity, damping, dt):
-        jump_gravity = (0, -300)
+        jump_gravity = (0, -350)
         pymunk.Body.update_velocity(body, jump_gravity, damping, dt)
 
 
@@ -325,6 +333,8 @@ class Rect:
         self.facing = facing
         self.color = pyg.Color(col)
         self.bouncy = bouncy
+        if type(self.bouncy) == int:
+            self.bouncy *= 0.7     #faithful to original game
         self.do_update = rotation or movement
         self.rotating = rotation    #rotation = (orb_center, orb_vel, rot_vel)
         self.moving = movement    #movement = ((x, y)'min', (x, y)'max', (x,y)'vector')
@@ -335,6 +345,103 @@ class Rect:
         self.shape.data = self
         self.shape.collision_type = 0
         self.shape.body.position = tuple(center)
+        self.shape.body.angle = -math.radians(facing)
+        self.shape.friction = 1
+        if self.bouncy:
+            self.shape.elasticity = self.bouncy
+
+        if self.do_update:
+            if self.rotating:
+                if not self.rotating[0]:
+                    self.orb_center = self.shape.body.position
+                else:
+                    self.orb_center = self.rotating[0]
+                self.orb_speed = self.rotating[1]
+                self.rot_speed = self.rotating[2]
+                self.vel = Vector2(0,0) #orb_vel
+                self.orbit_vector = Vector2(
+                    self.shape.body.position - self.orb_center
+                    )
+
+            if self.moving:
+                self.min_pos = Vector2(self.moving[0])
+                self.max_pos = Vector2(self.moving[1])
+                self.speed = Vector2(self.moving[2])    #move_vel
+                
+        Rect.group.append(self)
+
+    def render(self, surf):
+        self.position = pgut.to_pygame(self.shape.body.position, surf)
+        points = self.shape.get_vertices()
+        world_points = []
+        for point in points:
+            world_point = self.shape.body.local_to_world(point)
+            world_points.append(pgut.to_pygame(world_point, surf))
+        pyg.draw.polygon(surf, self.color, world_points)
+
+    def cycle(self, surf, dt):
+        self.update(dt)
+        self.render(surf)
+
+    def rotation(self, dt):
+        #orbiting
+        if self.rotating[0] and self.rotating[1]:
+            guide_vec = Vector2(
+                    self.shape.body.position - self.orb_center
+                    )
+            guide2_vec = guide_vec.rotate_rad(-self.orb_speed)
+            guide3_vec = guide_vec.rotate_rad(-self.orb_speed * dt)
+            direction = (guide3_vec - guide_vec).normalize() * (guide2_vec - guide_vec).length()
+            def speed_set(body, gravity, damping, dt):
+                self.body.velocity = tuple(direction)
+            self.body.velocity_func = speed_set
+        #rotating
+        self.body.angular_velocity = self.rot_speed
+           
+
+    def movement(self, dt):
+        #movement
+        if self.min_pos.x > self.shape.body.position.x:
+            self.speed.x = abs(self.speed.x)
+        elif self.max_pos.x < self.shape.body.position.x:
+            self.speed.x = -abs(self.speed.x)
+        if self.min_pos.y > self.shape.body.position.y:
+            self.speed.y = abs(self.speed.y)
+        elif self.max_pos.y < self.shape.body.position.y:
+            self.speed.y = -abs(self.speed.y)
+        
+        #apply speed!
+        def speed_set(body, gravity, damping, dt):
+            self.body.velocity = tuple(self.speed)
+        self.body.velocity_func = speed_set
+        
+    def update(self, dt):
+        if self.do_update:
+            if self.rotating:
+                self.rotation(dt)
+            if self.moving:
+                self.movement(dt)
+
+
+class Line:
+    def init(self, col, pos1, pos2, width=10,
+             facing = 0, bouncy = False, rotation = False, movement = False, death = False):
+        self.center = (pos1+pos2) / 2
+        self.facing = (Vector2(pos1)-Vector2(pos2)).angle
+        self.color = pyg.Color(col)
+        self.bouncy = bouncy
+        if type(self.bouncy) == int:
+            self.bouncy *= 0.7     #faithful to original game
+        self.do_update = rotation or movement
+        self.rotating = rotation    #rotation = (orb_center, orb_vel, rot_vel)
+        self.moving = movement    #movement = ((x, y)'min', (x, y)'max', (x,y)'vector')
+        self.death = death
+
+        self.body = pymunk.Body(body_type = pymunk.Body.KINEMATIC)
+        self.shape = pymunk.Poly.create_box(self.body, (self.width, self.height))
+        self.shape.data = self
+        self.shape.collision_type = 0
+        self.shape.body.position = tuple(self.center)
         self.shape.body.angle = -math.radians(facing)
         self.shape.friction = 1
         if self.bouncy:
@@ -409,6 +516,7 @@ class Rect:
                 self.rotation(dt)
             if self.moving:
                 self.movement(dt)
+
 
 
 while menu() != 'quit':

@@ -7,7 +7,6 @@ players["p_2"] = Player("P2", 1280 / 2+1, 720 / 2, "blue",
 # objects
 for i in range(5):
 	angle = i * 30
-	print(angle)
 	test = 370
 	starting_point = pygame.math.Vector2(1280 / 2 + test * math.sin(math.radians(angle)), 720 / 2 + test * math.cos(math.radians(angle)))
 	Rect((0, 0, angle / 2), starting_point, 200, 10,
@@ -16,7 +15,6 @@ for i in range(5):
 
 for i in range(6, 11):
 	angle = i * 30
-	print(angle)
 	test = 370
 	starting_point = pygame.math.Vector2(1280 / 2 + test * math.sin(math.radians(angle)), 720 / 2 + test * math.cos(math.radians(angle)))
 	Rect((0, 0, angle / 2), starting_point, 200, 10,
@@ -25,7 +23,6 @@ for i in range(6, 11):
 
 for i in range(2, 4):
 	angle = i * 60
-	print(angle)
 	test = 100
 	starting_point = pygame.math.Vector2(1280 / 2 + test * math.sin(math.radians(angle)), 720 / 2 + test * math.cos(math.radians(angle)))
 	Rect((255-angle/2, 0, 0), starting_point, 120, 10,
@@ -34,7 +31,6 @@ for i in range(2, 4):
 
 for i in range(5, 7):
 	angle = i * 60
-	print(angle)
 	test = 100
 	starting_point = pygame.math.Vector2(1280 / 2 + test * math.sin(math.radians(angle)), 720 / 2 + test * math.cos(math.radians(angle)))
 	Rect((255-angle/2, 0, 0), starting_point, 120, 10,
