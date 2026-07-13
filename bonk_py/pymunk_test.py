@@ -456,9 +456,6 @@ class Line:
                 self.orb_speed = self.rotating[1]
                 self.rot_speed = self.rotating[2]
                 self.vel = Vector2(0,0) #orb_vel
-                self.vec_length = Vector2(
-                    self.shape.body.position - self.orb_center
-                    ).length()
 
             if self.moving:
                 self.min_pos = Vector2(self.moving[0])
@@ -481,15 +478,17 @@ class Line:
         self.render(surf)
 
     def rotation(self, dt):
+        print('test')
         #orbiting
         if self.rotating[0] and self.rotating[1]:
             direction = Vector2(
                 self.shape.body.position - self.orb_center
                 ).normalize()
+            length = Vector2(self.shape.body.position - self.orb_center
+                ).length()
             direction.rotate_ip(90)
-            def speed_set(body, gravity, damping, dt):
-                self.body.velocity = tuple(direction * self.vec_length * -self.orb_speed)
-            self.body.velocity_func = speed_set
+            self.body.velocity = tuple(direction * length * -self.orb_speed)
+            print(self.body.velocity)
         #rotating
         self.body.angular_velocity = self.rot_speed
            
@@ -512,10 +511,10 @@ class Line:
         
     def update(self, dt):
         if self.do_update:
-            if self.rotating:
-                self.rotation(dt)
             if self.moving:
                 self.movement(dt)
+            if self.rotating:
+                self.rotation(dt)
 
 
 
