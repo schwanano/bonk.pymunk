@@ -359,9 +359,9 @@ class Rect:
                 self.orb_speed = self.rotating[1]
                 self.rot_speed = self.rotating[2]
                 self.vel = Vector2(0,0) #orb_vel
-                self.orbit_vector = Vector2(
-                    self.shape.body.position - self.orb_center
-                    )
+                self.defalut_vector_length = Vector2(
+                    center - self.orb_center
+                    ).length()
 
             if self.moving:
                 self.min_pos = Vector2(self.moving[0])
@@ -386,15 +386,15 @@ class Rect:
     def rotation(self, dt):
         #orbiting
         if self.rotating[0] and self.rotating[1]:
-            guide_vec = Vector2(
-                    self.shape.body.position - self.orb_center
-                    )
-            guide2_vec = guide_vec.rotate_rad(-self.orb_speed)
-            guide3_vec = guide_vec.rotate_rad(-self.orb_speed * dt)
-            direction = (guide3_vec - guide_vec).normalize() * (guide2_vec - guide_vec).length()
-            def speed_set(body, gravity, damping, dt):
-                self.body.velocity = tuple(direction)
-            self.body.velocity_func = speed_set
+            direction = Vector2(
+                self.shape.body.position - self.orb_center
+                ).normalize()
+            length = Vector2(self.shape.body.position - self.orb_center
+                ).length()
+            interpolation = self.defalut_vector_length - length
+            length += interpolation
+            direction.rotate_ip(90)
+            self.body.velocity = tuple(direction * length * -self.orb_speed)
         #rotating
         self.body.angular_velocity = self.rot_speed
            
@@ -478,7 +478,6 @@ class Line:
         self.render(surf)
 
     def rotation(self, dt):
-        print('test')
         #orbiting
         if self.rotating[0] and self.rotating[1]:
             direction = Vector2(
@@ -488,7 +487,6 @@ class Line:
                 ).length()
             direction.rotate_ip(90)
             self.body.velocity = tuple(direction * length * -self.orb_speed)
-            print(self.body.velocity)
         #rotating
         self.body.angular_velocity = self.rot_speed
            
