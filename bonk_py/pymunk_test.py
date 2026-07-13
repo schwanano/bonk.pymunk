@@ -378,6 +378,10 @@ class Rect:
             world_point = self.shape.body.local_to_world(point)
             world_points.append(pgut.to_pygame(world_point, surf))
         pyg.draw.polygon(surf, self.color, world_points)
+        if self.bouncy:
+            pyg.draw.aalines(surf, "black", 1, world_points)
+        if self.death:
+            pyg.draw.aalines(surf, "red", 1, world_points)
 
     def cycle(self, surf, dt):
         self.update(dt)
@@ -391,13 +395,16 @@ class Rect:
                 ).normalize()
             length = Vector2(self.shape.body.position - self.orb_center
                 ).length()
-            interpolation = self.defalut_vector_length - length
-            length += interpolation
-            direction.rotate_ip(90)
-            self.body.velocity = tuple(direction * length * -self.orb_speed)
+            
+            interpolation = (length - self.defalut_vector_length) / self.defalut_vector_length
+            if self.orb_speed < 0:
+                direction.rotate_ip(90 + interpolation * 360)
+                self.body.velocity = tuple(direction * length * -self.orb_speed)
+            else:
+                direction.rotate_ip(-90 - interpolation * 360)
+                self.body.velocity = tuple(direction * length * self.orb_speed)
         #rotating
         self.body.angular_velocity = self.rot_speed
-           
 
     def movement(self, dt):
         #movement
