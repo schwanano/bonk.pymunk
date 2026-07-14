@@ -89,9 +89,9 @@ def menu():
 def game():
     screen = pyg.display.set_mode((1280, 720))  #the superior scren res
     set_window_pos(screen)  #centering window
-    scr_size = Vector2(screen.get_size())   #i should global this
 
-    run = 1     #RUN
+    pyg.font.init()
+    font = pyg.font.Font(None, 74)
 
     clock = pyg.time.Clock()
     dt = 0
@@ -101,12 +101,16 @@ def game():
     space.gravity = (0, -200)
     space.collision_bias = 0
 
-    global global_movement
+    global round_over, pending_reset, reset_timer, global_movement
     global_movement = Vector2()     #not implemented currently
 
     #player and map
     pos_reset(space)
+    round_over = False
+    pending_reset = False
+    reset_timer = 0
 
+    run = 1     #run, b*tch, RUUUUN
     while run:
         for event in pyg.event.get():
             if event.type == pyg.QUIT:
@@ -120,28 +124,75 @@ def game():
                     screen = pyg.display.set_mode(
                         (w, h), flags = pyg.RESIZABLE
                         )
-                scr_size = Vector2(screen.get_size())
 
+        if round_over:
+            # Draw all player scores dynamically
+            y_offset = 200
+            for idx, p in enumerate(Player.group, start=1):
+                pid = p.pid
+                score = Player.score[pid]
+                text_surface = font.render(f"{pid.upper()} : {score}", True, p.col, "grey")
+                screen.blit(text_surface, (600, y_offset))
+                y_offset += 60  # move down for the next player
+
+            for p in Player.group:
+                if Player.score[p.pid] >= 7:
+                    win_surface = font.render(f"{p.pid.upper()} win!", True, "white", "black")
+                    screen.blit(win_surface, (550, 600))
+                    pyg.display.flip()
+
+                    end_time = pyg.time.get_ticks() + 3000
+                    while pyg.time.get_ticks() < end_time:
+                        for event in pyg.event.get():
+                            if event.type == pyg.QUIT:
+                                pyg.quit()
+                                return
+                        clock.tick(60)
+
+                    running = False
+
+            if pending_reset and pyg.time.get_ticks() >= reset_timer:
+                pending_reset = False
+                round_over = False
+                global_movement = Vector2()
+                pos_reset(space)
             
-        if pyg.display.get_active():
-            dt = clock.tick(60) / 1000
-            if dt < 0.1:
-                space.step(dt)
+        else:
+            global map_display_name, map_display_timer
+            current_time = pyg.time.get_ticks()
 
             screen.fill("white")
-            for rect in Rect.group:
-                rect.cycle(screen, dt)
-            for player in Player.group:
-                player.cycle(screen, space, dt)
 
-            if global_movement:
+
+            if current_time < map_display_timer:
                 for rect in Rect.group:
-                    rect.body.position += global_movement * dt
+                    rect.render(screen)
                 for player in Player.group:
-                    player.body.position += global_movement * dt
+                    player.render(screen)
 
-            #fps
-            fps(screen, dt)
+                map_surface = font.render(map_display_name.upper(), True, "black", 'grey')
+                map_rect = map_surface.get_rect(center=(640, 360))
+                screen.blit(map_surface, map_rect)
+
+            else:
+                dt = clock.tick(60) / 1000
+                
+                if dt < 0.1:
+                    for rect in Rect.group:
+                        rect.cycle(screen, dt)
+                    for player in Player.group:
+                        player.cycle(screen, space, dt)
+
+                    if global_movement:
+                        for rect in Rect.group:
+                            rect.body.position += global_movement * dt
+                        for player in Player.group:
+                            player.body.position += global_movement * dt
+                    
+                    space.step(dt)
+                    win_lose()
+                    #fps
+                    fps(screen, dt)
 
             pyg.display.flip()
 
@@ -153,12 +204,23 @@ def pos_reset(space):
 
     dir_path = os.path.dirname(os.path.realpath(__file__))
     
+
+    for p in Player.group:
+        try:
+            space.remove(p.shape, p.body)
+        except AssertionError:
+            pass
+    for r in Rect.group:
+        try:
+            space.remove(r.shape, r.body)
+        except AssertionError:
+            pass
+
     players = {}
     rects = {}
     Player.group.clear()
     Rect.group.clear()
-    Player.death_count = 0
-    
+
     if not glob.glob(f"{dir_path}/maps/*.txt"):
         if glob.glob(f"{dir_path}/maps/Used/*.txt"):
             for map_file in glob.glob(f"{dir_path}/maps/Used/*.txt"):
@@ -182,12 +244,26 @@ def pos_reset(space):
 
     exec("".join(bonk_map))
 
+    Player.count = len(Player.group)
     for p in Player.group:
         space.add(p.shape, p.body)
     for r in Rect.group:
         space.add(r.shape, r.body)
 
     shutil.move(map_c, f"{dir_path}/maps/Used")
+
+def win_lose():
+    global pending_reset, reset_timer, round_over
+    
+    if Player.count <= 1 and not pending_reset:  # avoid multiple calls
+        for p in Player.group:
+            if p.alive:
+                Player.score[p.pid] += 1
+            print(p.pid, ":", Player.score[p.pid])
+
+        pending_reset = True
+        reset_timer = pyg.time.get_ticks() + 3000
+        round_over = True    
 
     
 def fps(surf, dt):
@@ -207,7 +283,7 @@ class Player:
     group = []
     id_group = {}
     score = {}
-    death_count = 0
+    count = len(group)
 
     def __init__(self, pid, pos_x, pos_y, col,
                  kleft, kright, kjump, kfall, kheavy,
@@ -283,6 +359,7 @@ class Player:
         self.jump(space, dt)
         self.move(dt)
         self.render(surf)
+        self.are_you_alive()
 
     def jump(self, space, dt):
         def pre_solve(arbiter, space, data):
@@ -292,8 +369,11 @@ class Player:
                 elif type(shape) == pymunk.Poly:
                     rect = shape
             test_points = arbiter.contact_point_set.points[0]
-
-            if rect.data.bouncy == False and rect.data.death == False:
+            
+            if rect.data.death:
+                self.alive = False
+                Player.count -= 1
+            elif rect.data.bouncy == False and rect.data.death == False:
                 c = circle.body.position
                 p = test_points.point_a
                 if c.y > p.y and abs(c.x - p.x) < circle.radius / 3 * 2:
@@ -322,6 +402,14 @@ class Player:
     def higher_gravity(body, gravity, damping, dt):
         jump_gravity = (0, -350)
         pymunk.Body.update_velocity(body, jump_gravity, damping, dt)
+    
+    def are_you_alive(self):
+        if not self.alive:
+            pass
+        if not (-100 < self.body.position[1] < 6000):
+            if self.alive:
+                Player.count -= 1
+            self.alive = False
 
 
 class Rect:
