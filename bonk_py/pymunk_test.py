@@ -105,6 +105,8 @@ def game():
     global_movement = Vector2()     #not implemented currently
 
     #player and map
+    Player.id_group = {}
+    Player.score = {}
     pos_reset(space)
     round_over = False
     pending_reset = False
@@ -146,10 +148,10 @@ def game():
                         for event in pyg.event.get():
                             if event.type == pyg.QUIT:
                                 pyg.quit()
-                                return
+                                run = 0
                         clock.tick(60)
 
-                    running = False
+                    run = 0
 
             if pending_reset and pyg.time.get_ticks() >= reset_timer:
                 pending_reset = False
@@ -194,7 +196,7 @@ def game():
                     #fps
                     fps(screen, dt)
 
-            pyg.display.flip()
+        pyg.display.flip()
 
 #define pos_reset
 def pos_reset(space):
@@ -259,7 +261,6 @@ def win_lose():
         for p in Player.group:
             if p.alive:
                 Player.score[p.pid] += 1
-            print(p.pid, ":", Player.score[p.pid])
 
         pending_reset = True
         reset_timer = pyg.time.get_ticks() + 3000
