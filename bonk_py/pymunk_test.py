@@ -309,7 +309,7 @@ class Player:
         self.kfall = kfall
         self.kheavy = kheavy
 
-        self.onground = 1
+        self.onground = 0
         self.coyote_time = 5   #frames
         self.alive = 1
 
@@ -520,10 +520,12 @@ class Rect:
 
 
 class Line:
-    def init(self, col, pos1, pos2, width=10,
-             facing = 0, bouncy = False, rotation = False, movement = False, death = False):
+    def __init__(self, col, pos1, pos2, width=10,
+                 bouncy = False, rotation = False, movement = False, death = False):
         self.center = (pos1+pos2) / 2
-        self.facing = (Vector2(pos1)-Vector2(pos2)).angle
+        self.width = (pos2-pos1).length()
+        self.height = width
+        self.facing = (Vector2(pos2)-Vector2(pos1)).angle
         self.color = pyg.Color(col)
         self.bouncy = bouncy
         if type(self.bouncy) == int:
@@ -538,7 +540,7 @@ class Line:
         self.shape.data = self
         self.shape.collision_type = 0
         self.shape.body.position = tuple(self.center)
-        self.shape.body.angle = -math.radians(facing)
+        self.shape.body.angle = math.radians(self.facing)
         self.shape.friction = 1
         if self.bouncy:
             self.shape.elasticity = self.bouncy
@@ -568,6 +570,10 @@ class Line:
             world_point = self.shape.body.local_to_world(point)
             world_points.append(pgut.to_pygame(world_point, surf))
         pyg.draw.polygon(surf, self.color, world_points)
+        if self.bouncy:
+            pyg.draw.aalines(surf, "black", 1, world_points)
+        if self.death:
+            pyg.draw.aalines(surf, "red", 1, world_points)
 
     def cycle(self, surf, dt):
         self.update(dt)
@@ -581,11 +587,16 @@ class Line:
                 ).normalize()
             length = Vector2(self.shape.body.position - self.orb_center
                 ).length()
-            direction.rotate_ip(90)
-            self.body.velocity = tuple(direction * length * -self.orb_speed)
+            
+            interpolation = (length - self.defalut_vector_length) / self.defalut_vector_length
+            if self.orb_speed < 0:
+                direction.rotate_ip(90 + interpolation * 360)
+                self.body.velocity = tuple(direction * length * -self.orb_speed)
+            else:
+                direction.rotate_ip(-90 - interpolation * 360)
+                self.body.velocity = tuple(direction * length * self.orb_speed)
         #rotating
         self.body.angular_velocity = self.rot_speed
-           
 
     def movement(self, dt):
         #movement
@@ -605,10 +616,10 @@ class Line:
         
     def update(self, dt):
         if self.do_update:
-            if self.moving:
-                self.movement(dt)
             if self.rotating:
                 self.rotation(dt)
+            if self.moving:
+                self.movement(dt)
 
 
 
