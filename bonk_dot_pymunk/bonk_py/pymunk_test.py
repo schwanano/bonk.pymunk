@@ -90,7 +90,8 @@ def game():
     set_window_pos(screen)  #centering window
 
     pyg.font.init()
-    font = pyg.font.Font(None, 74)
+    font_name = pyg.font.match_font("MathJax_Typewriter")
+    font = pyg.font.Font(font_name, 74)
 
     clock = pyg.time.Clock()
     dt = 0
@@ -101,12 +102,13 @@ def game():
     space.collision_bias = 0
 
     global round_over, pending_reset, reset_timer, global_movement
-    global_movement = Vector2()     #not implemented currently
+    global_movement = Vector2()
 
     #player and map
-    Player.id_group = {}
     Player.score = {}
     pos_reset(space)
+
+    #used for post-round calls; points rendering, pos_reset, etc.
     round_over = False
     pending_reset = False
     reset_timer = 0
@@ -179,13 +181,17 @@ def game():
                 dt = clock.tick(60) / 1000
                 
                 if dt < 0.1:
-                    for rect in Rect.group:
-                        rect.cycle(screen, dt)
+                    Rect.cycle(screen, dt)
                     Player.cycle(screen, space, dt)
 
                     if global_movement:
                         for rect in Rect.group:
                             rect.body.position += global_movement * dt
+                            if rect.moving:
+                                rect.min_pos += global_movement * dt
+                                rect.max_pos += global_movement * dt
+                            if rect.rotating:
+                                rect.orb_center += global_movement * dt
                         for player in Player.group:
                             player.body.position += global_movement * dt
                     
@@ -196,7 +202,7 @@ def game():
 
         pyg.display.flip()
 
-#define pos_reset
+#map loading; shutil is innocent!
 def pos_reset(space):
     import shutil
     global players, rects, map_display_name, map_display_timer
@@ -221,6 +227,7 @@ def pos_reset(space):
     Player.group.clear()
     Rect.group.clear()
 
+    #map loading
     if not glob.glob(f"{dir_path}/maps/*.txt"):
         if glob.glob(f"{dir_path}/maps/Used/*.txt"):
             for map_file in glob.glob(f"{dir_path}/maps/Used/*.txt"):
@@ -280,12 +287,11 @@ def fps(surf, dt):
 
 class Player:
     group = []
-    id_group = {}
     score = {}
     count = len(group)
 
     def __init__(self, pid, pos_x, pos_y, col,
-                 kleft, kright, kjump, kfall, kheavy,
+                 kleft, kright, kjump, kfall, kheavy=pyg.K_ESCAPE, karrow=pyg.K_ESCAPE,
                  radius = 20):
         
         self.pid = pid
@@ -306,10 +312,13 @@ class Player:
         self.kjump = kjump
         self.kfall = kfall
         self.kheavy = kheavy
+        self.karrow = karrow
 
         self.onground = 0
         self.coyote_time = 5   #frames
         self.alive = 1
+        self.arrow_angle = 0
+        self.arrow_power = 0
 
         Player.group.append(self)
         if pid not in Player.score:
@@ -333,7 +342,7 @@ class Player:
             bar_render_pos_2 = pgut.to_pygame(shadow_pos - bar_vector * 8, surf)
             pyg.draw.line(surf, self.col, bar_render_pos_1, bar_render_pos_2, 2)
 
-    def move(self, dt):
+    def move(self, space, dt):
         keys = pyg.key.get_pressed()
         if keys[self.kjump]:
             if self.onground > 0:
@@ -345,11 +354,21 @@ class Player:
             self.body.velocity_func = Player.higher_gravity
         else:
             self.body.velocity_func = Player.normal_gravity
-        
-        if keys[self.kleft]:
-            self.body.apply_impulse_at_local_point((-90, 0))
-        if keys[self.kright]:
-            self.body.apply_impulse_at_local_point((90, 0))
+
+        if keys[self.karrow]:
+            self.arrow_power += dt
+            if keys[self.kleft]:
+                self.arrow_angle -= dt
+            if keys[self.kright]:
+                self.arrow_angle += dt
+        else:
+            if self.arrow_power:
+                arrow = self.Arrows(self, self.arrow_angle, self.arrow_power)
+                arrow.shoot(space)
+            if keys[self.kleft]:
+                self.body.apply_impulse_at_local_point((-90, 0))
+            if keys[self.kright]:
+                self.body.apply_impulse_at_local_point((90, 0))
             
         if 0 < self.onground < self.coyote_time:
             self.onground -= dt * 60
@@ -358,7 +377,7 @@ class Player:
         Player.collision_handler(space, dt)
         for player in Player.group:
             if player.alive:
-                player.move(dt)
+                player.move(space, dt)
                 player.render(surf)
                 player.are_you_alive(space)
 
@@ -411,6 +430,12 @@ class Player:
                 Player.count -= 1
             self.alive = False
             space.remove(self.shape, self.body)
+
+    class Arrows:
+        def __init__(self, parent, direction, angle):
+            pass
+        def shoot(self, space):
+            pass
 
 
 class Rect:
@@ -472,9 +497,10 @@ class Rect:
         if self.death:
             pyg.draw.aalines(surf, "red", 1, world_points)
 
-    def cycle(self, surf, dt):
-        self.update(dt)
-        self.render(surf)
+    def cycle(surf, dt):
+        for rect in Rect.group:
+            rect.update(dt)
+            rect.render(surf)
 
     def rotation(self, dt):
         #orbiting

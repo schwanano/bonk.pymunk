@@ -3,10 +3,6 @@ players["p_1"] = Player("P1", 40, 720 / 2, "red",
 	pygame.K_a, pygame.K_d, pygame.K_w, pygame.K_s, pygame.K_LCTRL)
 players["p_2"] = Player("P2", 80, 720 / 2, "blue",
 	pygame.K_LEFT, pygame.K_RIGHT, pygame.K_UP, pygame.K_DOWN, pygame.K_RETURN)
-players["debug"] = Player("debug", 300, 750, "yellow",
-	pygame.K_a, pygame.K_d, pygame.K_w, pygame.K_s, None)
-players["debug2"] = Player("debug2", 400, 750, "purple",
-	pygame.K_LEFT, pygame.K_RIGHT, pygame.K_UP, pygame.K_DOWN, None)
 
 global player_collision_status
 player_collision_status = False
@@ -95,10 +91,23 @@ rects["room_2_lower_ceiling"] = Rect("black", pygame.math.Vector2((200+850)/2, (
 
 rects["line_test"] = Line("black", Vector2(950, 1000), Vector2(1130, 950))
 
-rects["line_test_2"] = Line("black", Vector2(1130, 1250), Vector2(350, 1010))
+rects["line_test_2"] = Line("orange", Vector2(1130, 1250), Vector2(350, 1010))
+
+rects["one_hell_of_a_death_cross_1"] = Rect(pyg.Color((100, 0, 0)), Vector2(350, 1010),
+    280, 10,
+    rotation=(None, 0, -1), movement=(Vector2(350, 1010), Vector2(896, 1178), (78, 24)), death=True)
+
+rects["one_hell_of_a_death_cross_2"] = Rect(pyg.Color((100, 0, 0)), Vector2(350, 1010),
+    10, 280,
+    rotation=(None, 0, -1), movement=(Vector2(350, 1010), Vector2(896, 1178), Vector2(78, 24)), death=True)
 
 rects["hell_death_cube1"] = Line("grey", Vector2(800, 1070), Vector2(830, 1000),
 	death=True)
+
+rects["line_test_3"] = Line("yellow", Vector2(0, 800), Vector2(0, 1000),
+    bouncy=2)
+
+rects["line_test_4"] = Line("black", Vector2(0, 1000), Vector2(1000, 1300))
 
 global global_movement
 global_movement.y = -10
