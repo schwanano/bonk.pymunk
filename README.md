@@ -1,2 +1,2 @@
-# bonk.pymunk
-desc
+# bonk.pymunk - deprecated
+I hate moving files and folders in github, it breaks everything; I gotta move to another repo just bc of broken filesystem...
